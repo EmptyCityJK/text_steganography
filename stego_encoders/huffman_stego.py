@@ -60,7 +60,7 @@ class HuffmanStego:
             token_ids = topk.indices.tolist()
             probs = torch.softmax(topk.values, dim=0).tolist()
             
-            # ✅ 过滤掉包含换行的 token
+            # 过滤掉包含换行的 token
             filtered = filter_safe_tokens(token_ids, probs, self.model)
 
             tree = build_huffman_tree(filtered)

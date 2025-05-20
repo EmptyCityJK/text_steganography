@@ -9,6 +9,7 @@ from stego_encoders.bins_stego import BinsStego
 from stego_encoders.huffman_stego import HuffmanStego
 from stego_encoders.perfect_tree_stego import PerfectTreeStego
 from stego_encoders.arithmetic_stego import ArithmeticStego
+from stego_encoders.discop_stego import DiscopStego
 
 def run_edit(args):
     model = BERTWrapper(model_name=args.model)
@@ -70,13 +71,23 @@ def run_arithmetic(args):
     ba = bitarray.bitarray(secret_bit)
     secret = ba.tobytes().decode('utf-8', 'ignore')
     print("\n[Recovered Secret Message]:\n", secret)
+    
+def run_discop(args):
+    model = GPT2Wrapper(model_name=args.model)
+    stego = DiscopStego(model, bit_width=(args.k - 1).bit_length())
 
-
+    result_text = stego.embed(secret_text=args.secret_text, context=args.context)
+    print("\n[Generated Cover Text]:\n", result_text)
+    
+    # 记录生成 token 长度（用于控制解码）
+    cover_tokens = model.tokenizer.encode(result_text)
+    secret = stego.decode(context=args.context, cover_text_len=len(cover_tokens))
+    print("\n[Recovered Secret Message]:\n", secret)
 
 def main():
     parser = argparse.ArgumentParser(description="Text Steganography System")
 
-    parser.add_argument("--task", type=str, choices=["edit", "bins", "huffman", "huffman_fixed", "arithmetic"], required=True, help="Task type")
+    parser.add_argument("--task", type=str, choices=["edit", "bins", "huffman", "huffman_fixed", "arithmetic", "discop"], required=True, help="Task type")
     parser.add_argument("--model", type=str, default="bert-base-uncased", help="HuggingFace model name")
     parser.add_argument("--k", type=int, default=4, help="Top-k candidate tokens used per mask")
     parser.add_argument("--temperature", type=float, default=0.8, help="Softmax temperature (lower = sharper distribution)")
@@ -97,6 +108,8 @@ def main():
         run_huffman_fixed(args)
     elif args.task == "arithmetic":
         run_arithmetic(args) 
+    elif args.task == "discop":
+        run_discop(args)
     else:
         raise NotImplementedError(f"Task '{args.task}' not supported yet.")
 

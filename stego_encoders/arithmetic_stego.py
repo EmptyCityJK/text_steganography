@@ -49,7 +49,6 @@ class ArithmeticStego:
                 log_probs = F.log_softmax(logits, dim=0)
                 
                 # 2. 编码消息比特段
-                # Cutoff low probabilities that would be rounded to 0
                 # 计算当前区间宽度 cur_int_range，用作概率范围映射
                 cur_int_range = cur_interval[1]-cur_interval[0]
                 cur_threshold = 1/cur_int_range # 阈值
@@ -57,35 +56,28 @@ class ArithmeticStego:
                 k = min(max(2, (probs_temp < cur_threshold).nonzero()[0].item()), self.topk)
                 probs_temp_int = probs_temp[:k] # 保留top-k个概率
                 
-                # Rescale to correct range
                 # 将概率重缩放成当前区间宽度的整数分布
                 probs_temp_int = probs_temp_int/probs_temp_int.sum()*cur_int_range
 
-                # Round probabilities to integers given precision
                 # 并累计概率成整数累积概率
                 probs_temp_int = probs_temp_int.round().long()
                 cum_probs = probs_temp_int.cumsum(0)
 
-                # Remove any elements from the bottom if rounding caused the total prob to be too large
                 # 如果累积概率大于当前区间宽度，去掉多余的元素
                 overfill_index = (cum_probs > cur_int_range).nonzero()
                 if len(overfill_index) > 0:
                     cum_probs = cum_probs[:overfill_index[0]]
 
-                # Add any mass to the top if removing/rounding causes the total prob to be too small
                 # 如果累积概率小于当前区间宽度，补齐到当前区间宽度
                 cum_probs += cur_int_range-cum_probs[-1] # add
 
-                # Get out resulting probabilities
                 # 计算最终的概率分布
                 probs_final = cum_probs.clone()
                 probs_final[1:] = cum_probs[1:] - cum_probs[:-1]
 
-                # Convert to position in range
                 # 将概率映射到当前区间
                 cum_probs += cur_interval[0]
 
-                # Get selected index based on binary fraction from message bits
                 # 计算消息比特对应的整数索引 message_idx，找到对应的token索引 selection。
                 message_bits = message[i:i+self.precision]
                 if i+self.precision > len(message):
@@ -93,17 +85,14 @@ class ArithmeticStego:
                 message_idx = bits2int(reversed(message_bits))
                 selection = (cum_probs > message_idx).nonzero()[0].item()
 
-                # Calculate new range as ints
                 # 计算新的区间范围
                 new_int_bottom = cum_probs[selection-1] if selection > 0 else cur_interval[0]
                 new_int_top = cum_probs[selection]
 
-                # Convert range to bits
                 # 将当前区间转换成比特表示
                 new_int_bottom_bits_inc = list(reversed(int2bits(new_int_bottom, self.precision)))
                 new_int_top_bits_inc = list(reversed(int2bits(new_int_top-1, self.precision))) # -1 here because upper bound is exclusive
 
-                # Consume most significant bits which are now fixed and update interval
                 # 计算当前区间的比特表示，更新当前区间
                 num_bits_encoded = num_same_from_beg(new_int_bottom_bits_inc, new_int_top_bits_inc)
                 i += num_bits_encoded
@@ -114,7 +103,6 @@ class ArithmeticStego:
                 cur_interval[0] = bits2int(reversed(new_int_bottom_bits))
                 cur_interval[1] = bits2int(reversed(new_int_top_bits))+1 # +1 here because upper bound is exclusive
                 
-                # Update history with new token
                 # 更新历史生成token，加入输出序列。
                 prev = indices[selection].view(1)
                 output = torch.cat((output, prev))
