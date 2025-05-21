@@ -6,7 +6,7 @@ class EditStego:
     def __init__(self, model, k=4):
         self.model = model
         self.k = k # 每个掩码位置预测的候选词数量
-        self.bit_width = (k - 1).bit_length() # 用多少比特表示 k 个候选词的索引
+        # self.bit_width = (k - 1).bit_length() # 用多少比特表示 k 个候选词的索引
 
     def embed(self, secret_text: str, context: str) -> str:
         """
@@ -20,20 +20,23 @@ class EditStego:
         new_words = words.copy() # 待嵌入的文本
 
         for i, word in enumerate(words):
-            if re.match(r"^\w+$", word) and bit_ptr + self.bit_width <= len(secret_bits):
+            if re.match(r"^\w+$", word) and bit_ptr < len(secret_bits):
                 # 将当前单词用 [MASK] 替换，形成带掩码的文本 mask_text
                 mask_text = " ".join(words[:i] + ["[MASK]"] + words[i+1:])
                 # 用语言模型预测该掩码位置的 top-k 备选词列表 candidates
                 candidates = self.model.get_top_k_predictions(mask_text, i, self.k)
                 if not candidates:
                     continue
+                # 动态计算当前候选词所需的比特宽度
                 bit_width_i = (len(candidates) - 1).bit_length()
-                # 取当前待嵌入的秘密比特块
-                bit_chunk = secret_bits[bit_ptr:bit_ptr + self.bit_width]
-                index = int("".join(bit_chunk), 2) # 将比特块转换为十进制索引 
+                # 检查剩余比特是否足够
+                if bit_ptr + bit_width_i > len(secret_bits):
+                    break
+                bit_chunk = secret_bits[bit_ptr:bit_ptr + bit_width_i]
+                index = int("".join(bit_chunk), 2)
                 index = min(index, len(candidates) - 1)
-                new_words[i] = candidates[index] # 选择对应候选词
-                bit_ptr += self.bit_width # 指针前移
+                new_words[i] = candidates[index]
+                bit_ptr += bit_width_i  # 按实际使用量移动指针
 
         return " ".join(new_words)
 
@@ -54,9 +57,10 @@ class EditStego:
                 candidates = self.model.get_top_k_predictions(mask_text, i, self.k)
                 if cover_words[i] in candidates:
                     index = candidates.index(cover_words[i])
-                    # 将索引还原为比特串
-                    bits = bin(index)[2:].zfill(self.bit_width)
-                    recovered_bits.extend(bits) # 拼接
+                    # 动态计算该位置使用的比特宽度
+                    bit_width_i = (len(candidates) - 1).bit_length()
+                    bits = bin(index)[2:].zfill(bit_width_i)
+                    recovered_bits.extend(bits)
 
         print(f"[Debug] Recovered Bits: {''.join(recovered_bits)}  (Length: {len(recovered_bits)})")  # 调试
         return bitstring_to_text("".join(recovered_bits))
