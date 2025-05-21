@@ -87,7 +87,7 @@ def run_discop(args):
 def main():
     parser = argparse.ArgumentParser(description="Text Steganography System")
 
-    parser.add_argument("--task", type=str, choices=["edit", "bins", "huffman", "huffman_fixed", "arithmetic", "discop"], required=True, help="Task type")
+    parser.add_argument("--task", type=str, choices=["edit", "bins", "huffman", "perfect", "arithmetic", "discop"], required=True, help="Task type")
     parser.add_argument("--model", type=str, default="bert-base-uncased", help="HuggingFace model name")
     parser.add_argument("--k", type=int, default=4, help="Top-k candidate tokens used per mask")
     parser.add_argument("--temperature", type=float, default=0.8, help="Softmax temperature (lower = sharper distribution)")
@@ -104,7 +104,7 @@ def main():
         run_bins(args)
     elif args.task == "huffman":
         run_huffman(args)
-    elif args.task == "huffman_fixed":
+    elif args.task == "perfect":
         run_huffman_fixed(args)
     elif args.task == "arithmetic":
         run_arithmetic(args) 
